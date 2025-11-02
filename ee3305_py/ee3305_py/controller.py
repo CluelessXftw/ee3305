@@ -162,8 +162,8 @@ class Controller(Node):
 
         # saturate velocities. The following can result in the wrong curvature,
         # but only when the robot is travelling too fast (which should not occur if well tuned).
-        lin_vel = 0.0
-        ang_vel = 0.0 * lookahead_x * lookahead_y
+        #lin_vel = 0.0
+        #ang_vel = 0.0 * lookahead_x * lookahead_y
 
         # publish velocities
         msg_cmd_vel = TwistStamped()
