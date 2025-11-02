@@ -112,7 +112,7 @@ class Controller(Node):
             px = self.path_poses_[i].pose.position.x
             py = self.path_poses_[i].pose.position.y
             dist = hypot(px - self.robot_x_, py - self.robot_y_)
-            if dist >= self.lookahead_distance:
+            if dist >= self.lookahead_distance_:
                 lookahead_idx = i
                 break   # Stop at first point that satisfies lookahead distance
 
