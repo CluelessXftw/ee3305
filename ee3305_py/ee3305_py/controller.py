@@ -53,8 +53,8 @@ class Controller(Node):
         # Other Instance Variables
         self.received_odom_ = False
         self.received_path_ = False
-        self.robot_x_ = 0.0
-        self.robot_y_ = 0.0
+        self.rbt_x_ = 0.0
+        self.rbt_y_ = 0.0
         self.robot_yaw_ = 0.0
         self.goal_tolerance = 0.1
 
@@ -74,8 +74,8 @@ class Controller(Node):
     # Odometry subscriber callback
     def callbackSubOdom_(self, msg: Odometry):
         # Extract robot position x and y
-        self.robot_x_ = msg.pose.pose.position.x
-        self.robot_y_= msg.pose.pose.position.y
+        self.rbt_x_ = msg.pose.pose.position.x
+        self.rbt_y_= msg.pose.pose.position.y
 
         # Extract quaternion orientation
         q = msg.pose.pose.orientation
@@ -101,7 +101,7 @@ class Controller(Node):
         for i, pose in enumerate(self.path_poses_):
             px = pose.pose.position.x
             py = pose.pose.position.y
-            dist = hypot(px - self.robot_x_, py - self.robot_y_)
+            dist = hypot(px - self.rbt_x_, py - self.rbt_y_)
             if dist < min_dist:
                 min_dist = dist
                 closest_idx = i
@@ -111,7 +111,7 @@ class Controller(Node):
         for i in range(closest_idx, len(self.path_poses_)):
             px = self.path_poses_[i].pose.position.x
             py = self.path_poses_[i].pose.position.y
-            dist = hypot(px - self.robot_x_, py - self.robot_y_)
+            dist = hypot(px - self.rbt_x_, py - self.rbt_y_)
             if dist >= self.lookahead_distance_:
                 lookahead_idx = i
                 break   # Stop at first point that satisfies lookahead distance
@@ -141,8 +141,8 @@ class Controller(Node):
         lookahead_x, lookahead_y = self.getLookaheadPoint_()
 
         # get distance to lookahead point (not to be confused with lookahead_distance)
-        dx = lookahead_x - self.robot_x_
-        dy = lookahead_y - self.robot_y_
+        dx = lookahead_x - self.rbt_x_
+        dy = lookahead_y - self.rbt_y_
         dist_to_lookahead = hypot(dx, dy)
         
         # stop the robot if close to the point.
