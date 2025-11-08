@@ -34,13 +34,15 @@ class Planner(Node):
 
         # Parameters: Declare
         self.declare_parameter("max_access_cost", int(98)) 
-        self.declare_parameter("use_a_star", False) #toggle between dijkstra and a*, default is False, unless specified in run.yaml
+        self.declare_parameter("use_a_star", False) #toggle on a*, default is False, unless specified in run.yaml
         self.declare_parameter("heuristic_type", "octile")  # options: euclidean, octile (euclidean is more smmooth, octile is faster and diagonal)
+        self.declare_parameter("use_theta_star", False)  # toggle to use theta* algorithm, default is False unless specified in run.yaml
 
         # Parameters: Get Values
         self.max_access_cost_ = self.get_parameter("max_access_cost").value
         self.use_a_star_ = self.get_parameter("use_a_star").value #get use_a_star parameter
         self.heuristic_type_ = self.get_parameter("heuristic_type").value #get heuristic type parameter
+        self.use_theta_star_ = self.get_parameter("use_theta_star").value #get use_theta_star parameter
 
         # Handles: Topic Subscribers
         # Global costmap subscriber
@@ -88,14 +90,16 @@ class Planner(Node):
         
         # !TODO: write to rbt_x_, rbt_y_, goal_x_, goal_y_ (Done - CY)
         self.rbt_x_ = msg.poses[0].pose.position.x
-        self.rbt_y_ = msg.poses[0].pose.position.y
+                self.declare_parameter("use_theta_star", False)  # toggle to use theta* algorithm, default is False unless specified in run.yaml
+                self.declare_parameter("smoothing_resample_spacing", 0.05)  # meters, spacing for post-process resampling
         self.goal_x_ = msg.poses[1].pose.position.x
         self.goal_y_ = msg.poses[1].pose.position.y
         
         self.has_new_request_ = True
 
-    # Global costmap subscriber callback
-    # This is only run once because the costmap is only published once, at the start of the launch.
+                self.declare_parameter("heuristic_type", "octile")  # options: euclidean, octile (euclidean is more smooth, octile is faster and diagonal)
+                self.declare_parameter("use_theta_star", False)  # toggle to use theta* algorithm, default is False unless specified in run.yaml
+                self.declare_parameter("smoothing_resample_spacing", 0.05)  # meters, spacing for post-process resampling
     def callbackSubGlobalCostmap_(self, msg: OccupancyGrid):
         
         # !TODO: write to costmap_, costmap_resolution_, costmap_origin_x_, costmap_origin_y_, costmap_rows_, costmap_cols_
@@ -120,6 +124,39 @@ class Planner(Node):
         # run the path planner
         self.dijkstra_(self.rbt_x_, self.rbt_y_, self.goal_x_, self.goal_y_)
 
+    
+            def _resample_path_xy_(self, points_xy, spacing):
+                # Resample polyline defined by list of (x,y) at roughly fixed spacing
+                if not points_xy:
+                    return []
+                if len(points_xy) == 1:
+                    return points_xy[:]
+                out = [points_xy[0]]
+                acc = 0.0
+                prev_x, prev_y = points_xy[0]
+                for i in range(1, len(points_xy)):
+                    x, y = points_xy[i]
+                    dx = x - prev_x
+                    dy = y - prev_y
+                    seg_len = (dx*dx + dy*dy) ** 0.5
+                    if seg_len == 0:
+                        continue
+                    ux = dx / seg_len
+                    uy = dy / seg_len
+                    d = 0.0
+                    while acc + seg_len - d >= spacing:
+                        remain = spacing - acc
+                        nx = prev_x + ux * (d + remain)
+                        ny = prev_y + uy * (d + remain)
+                        out.append((nx, ny))
+                        d += remain
+                        acc = 0.0
+                    acc += seg_len - d
+                    prev_x, prev_y = x, y
+                # Ensure the last point is the goal exactly
+                if out[-1] != points_xy[-1]:
+                    out.append(points_xy[-1])
+                return out
         self.has_new_request_ = False
 
     # Publish the interpolated path for testing
@@ -199,6 +236,31 @@ class Planner(Node):
         else:
             return 0
         
+    def line_of_sight_(self, node0, node1):
+        #Bresenham's Line Algorithm
+        c0, r0 = node0.c, node0.r
+        c1, r1 = node1.c, node1.r
+        dc = abs(c1 - c0)
+        dr = abs(r1 - r0)
+        signc = 1 if c1 - c0 > 0 else -1
+        signr = 1 if r1 - r0 > 0 else -1
+        error = dc - dr
+        r,c = r0, c0
+        while True:
+            idx = self.CRToIndex_(c, r)
+            if self.costmap_[idx] > self.max_access_cost_:
+                return False
+            if c == c1 and r == r1:
+                break
+            error2 = error * 2
+            if error2 > -dr:
+                error -= dr
+                c += signc
+            if error2 < dc:
+                error += dc
+                r += signr
+        return True
+        
 
     # Runs the path planning algorithm based on the world coordinates.
     def dijkstra_(self, start_x, start_y, goal_x, goal_y):
@@ -209,7 +271,7 @@ class Planner(Node):
         #return
 
         # Initializations ---------------------------------
-        expansions = 0 # to count number of expansions to compare dijkstra and a*
+        expansions = 0 # to count number of expansions to compare algorithms
         
         # Initialize nodes
         #nodes = [DijkstraNode(0, 0)]  # replace this (Done - CY)
@@ -225,7 +287,8 @@ class Planner(Node):
         start_node.g = 0.0
 
         #setting the starting node can change depending on algorithm (separate cuz a* still in progress, can still test with dijkstra)
-        if self.use_a_star_:
+        # Use heuristic when running A* or Theta*
+        if self.use_a_star_ or self.use_theta_star_:
             start_node.h = self.heuristic_(rbt_c, rbt_r, goal_c, goal_r)
         else:
             start_node.h = 0.0
@@ -308,19 +371,54 @@ class Planner(Node):
                 cell_cost = self.costmap_[nb_idx]
                 if cell_cost > self.max_access_cost_:
                     continue
-
+                """
+                # Prevent diagonal corner cutting: if moving diagonally ensure both adjacent cardinals passable
+                if dc != 0 and dr != 0:
+                    c1a, r1a = node.c + dc, node.r          # horizontal step
+                    c2a, r2a = node.c, node.r + dr          # vertical step
+                    # If either intermediate cell is out of map or blocked, disallow diagonal
+                    blocked = False
+                    if self.outOfMap_(c1a, r1a) or self.outOfMap_(c2a, r2a):
+                        blocked = True
+                    else:
+                        idx1 = self.CRToIndex_(c1a, r1a)
+                        idx2 = self.CRToIndex_(c2a, r2a)
+                        cost1 = self.costmap_[idx1]
+                        cost2 = self.costmap_[idx2]
+                        if cost1 < 0: cost1 = 100
+                        if cost2 < 0: cost2 = 100
+                        if cost1 > self.max_access_cost_ or cost2 > self.max_access_cost_:
+                            blocked = True
+                    if blocked:
+                        continue
+                """
                 # Get the relative g-cost and push to open-list
                 dist = hypot(dc, dr) #account for diagonal movement
-                relative_g = node.g + dist * (cell_cost + 1)
-                if relative_g < nb_node.g:
-                    nb_node.g = relative_g
+                # Standard relaxation cost (current node as parent)
+                standard_g = node.g + dist * (cell_cost + 1)
+
+                best_parent = node
+                best_g = standard_g
+
+                # Theta*: try to shortcut to the neighbor from node.parent if line-of-sight exists
+                if self.use_theta_star_ and node.parent is not None:
+                    p = node.parent
+                    if self.line_of_sight_(p, nb_node):
+                        los_dist = hypot(nb_c - p.c, nb_r - p.r)
+                        los_g = p.g + los_dist * (cell_cost + 1)
+                        if los_g < best_g:
+                            best_g = los_g
+                            best_parent = p
+
+                if best_g < nb_node.g:
+                    nb_node.g = best_g
                     # Compute/update heuristic & f depending on algorithm
-                    if self.use_a_star_:
+                    if self.use_a_star_ or self.use_theta_star_:
                         nb_node.h = self.heuristic_(nb_c, nb_r, goal_c, goal_r)
                     else:
                         nb_node.h = 0.0
                     nb_node.f = nb_node.g + nb_node.h
-                    nb_node.parent = node
+                    nb_node.parent = best_parent
                     heappush(open_list, nb_node)
 
         self.get_logger().warn(f"No Path Found! Expansions: {expansions}")
