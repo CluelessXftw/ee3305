@@ -280,9 +280,6 @@ class Planner(Node):
 
                 # Ignore if the cell cost exceeds max_access_cost (to avoid passing through obstacles)
                 cell_cost = self.costmap_[nb_idx]
-                if cell_cost <= 0:
-                    cell_cost = 99  # treat unknown cells as obstacles
-
                 if cell_cost > self.max_access_cost_:
                     continue
 
