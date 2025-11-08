@@ -201,7 +201,20 @@ class Controller(Node):
             return
         
 
+# Process LaserScan to find the minimum distance to an obstacle
+        valid_ranges = [r for r in self.latest_laserscan.ranges if r > 0 and r < float('inf')]
+        min_distance = min(valid_ranges) if valid_ranges else float('inf')
+        self.obstacle_distance = min_distance
 
+        if min_distance < self.obstacle_stop_threshold_:
+            self.obstacle_imminent_flag = True
+            self.obstacle_near_flag = True
+        elif min_distance < self.obstacle_slowdown_threshold_:
+            self.obstacle_imminent_flag = False
+            self.obstacle_near_flag = True
+        else:
+            self.obstacle_imminent_flag = False
+            self.obstacle_near_flag = False
 
         lx = cos(-self.rbt_yaw_) * dx - sin(-self.rbt_yaw_) * dy
         ly = sin(-self.rbt_yaw_) * dx + cos(-self.rbt_yaw_) * dy
