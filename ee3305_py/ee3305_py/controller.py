@@ -181,11 +181,18 @@ class Controller(Node):
         if abs(heading_error) > rotate_threshold:
             # Rotate in place
             print("Rotating in place to face the goal")
-            lin_vel = 0.5 * (1 if heading_error > 0 else -1)  # small forward velocity to help rotation
+            lin_vel = 0.0
             ang_vel = max(-self.max_ang_vel_, min(self.max_ang_vel_, heading_error))
             if abs(ang_vel) < 0.2:
                 ang_vel = 0.2 * (1 if heading_error > 0 else -1)   
             print(f"Publishing: lin_vel={lin_vel}, ang_vel={ang_vel}")
+
+            msg_cmd_vel = TwistStamped()
+            msg_cmd_vel.header.stamp = self.get_clock().now().to_msg()
+            msg_cmd_vel.twist.linear.x = lin_vel
+            msg_cmd_vel.twist.angular.z = ang_vel
+            self.pub_cmd_vel_.publish(msg_cmd_vel)
+            self.get_logger().info("Spin Mode Activated")
         else:
             # stop the robot if close to the point.
             if dist_to_lookahead < self.stop_thres_:  # goal tolerance
