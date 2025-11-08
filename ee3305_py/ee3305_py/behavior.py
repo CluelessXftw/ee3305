@@ -23,6 +23,15 @@ class Behavior(Node):
         self.frequency_ = self.get_parameter("frequency").value
         self.plan_frequency_ = self.get_parameter("plan_frequency").value
 
+        #below is for unstuck mission 
+        self.prev_rbt_x_ = None
+        self.prev_rbt_y_ = None
+        self.stuck_counter_ = 0
+        self.stuck_threshold_ = 20   # number of timer ticks to consider stuck
+        self.stuck_distance_ = 0.01  # minimum distance to consider not moving
+        self.retreat_distance_ = 0.2 # how far to retreat
+        self.retreating_ = False     
+
         # Handles: Topic Subscribers
         # !TODO: Goal pose subscriber
         	
@@ -110,12 +119,26 @@ class Behavior(Node):
             self.goal_reached_ = False
 
     # #Below is when the robot is stuck and needs a new path
-    #     prev_x, prev_y = self.rbt_x_, self.rbt_y_
-    #     stuck_counter = 0
-    #     stuck_distance = 0.01
-    #     if (hypot(self.rbt_x_ - prev_x, self.rbt_y_ - prev_y) < 0.01) and not self.goal_reached_:
-    #         stuck_counter += 1
-    #         if stuck_counter >= self.plan_frequency_ * 5:  # stuck for 5
+        # if self.prev_rbt_x_ is not None:
+        #     dist_moved = hypot(self.rbt_x_ - self.prev_rbt_x_, self.rbt_y_ - self.prev_rbt_y_)
+        # if dist_moved < self.stuck_distance_ and not goal_is_close:
+        #     self.stuck_counter_ += 1
+        # else:
+        #     self.stuck_counter_ = 0
+        #     self.retreating_ = False
+
+        # # If stuck too long, trigger retreat
+        # if self.stuck_counter_ >= self.stuck_threshold_ and not self.retreating_:
+        #     self.retreating_ = True
+        #     self.stuck_counter_ = 0
+
+        #     dx_retreat = self.rbt_x_ - self.prev_rbt_x_
+        #     dy_retreat = self.rbt_y_ - self.prev_rbt_y_
+        #     self.retreat_goal_x_ = self.rbt_x_ + dx_retreat
+        #     self.retreat_goal_y_ = self.rbt_y_ + dy_retreat
+        #     self.get_logger().info("RETREEEEEEEEEEEEAAAAAAAAAAAT")
+        # self.prev_rbt_x_ = self.rbt_x_
+        # self.prev_rbt_y_ = self.rbt_y_
 
     # Callback for publishing path requests between clicked_point (goal) and robot position.
     # Normally path requests are implemented with ROS2 service, and the service is called in the main timer.

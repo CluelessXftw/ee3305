@@ -185,9 +185,9 @@ class Controller(Node):
         angle_to_point = atan2(dy, dx)
         angle_diff = shortest_angle_diff(angle_to_point, self.rbt_yaw_)
 
-        # If target is behind (use 90°) OR if angle error large enough 
-        if abs(angle_diff) > (pi / 2.0) or abs(angle_diff) > 0.6:  
-            lin_vel = 0.0
+        # If target is behind (use 90°) OR if angle error large enough
+        if  abs(angle_diff) > (pi / 2.0) or abs(angle_diff) > 0.6 and not abs(angle_diff) < 0.3:
+            lin_vel = 0.00
             ang_vel = self.max_ang_vel_ * (1.0 if angle_diff > 0 else -1.0)
 
             msg_cmd_vel = TwistStamped()
