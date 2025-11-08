@@ -323,10 +323,12 @@ class Planner(Node):
                 nb_r = node.r + dr
                 #nb_idx = 0 * nb_c * nb_r
 
+
                 # Continue if out of map
                 if self.outOfMap_(nb_c, nb_r):
                     continue
                 nb_idx = self.CRToIndex_(nb_c, nb_r)
+
 
                 # Get the neighbor node
                 nb_node = nodes[nb_idx]
@@ -339,11 +341,9 @@ class Planner(Node):
                 cell_cost = self.costmap_[nb_idx]
                 if cell_cost > self.max_access_cost_:
                     continue
-                # Get the relative g-cost and push to open-list
                 dist = hypot(dc, dr) #account for diagonal movement
-                # Standard relaxation cost (current node as parent)
+                #  g cost (current node as parent)
                 standard_g = node.g + dist * (cell_cost + 1)
-
                 best_parent = node
                 best_g = standard_g
 
