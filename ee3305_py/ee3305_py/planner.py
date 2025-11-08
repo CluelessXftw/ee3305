@@ -104,15 +104,6 @@ class Planner(Node):
 
         self.costmap_ = list(msg.data) #create a copy of the costmap data
 
-        # Check if costmap data length matches rows * cols
-        '''
-        expected_len = int(self.costmap_rows_ * self.costmap_cols_)
-        if len(self.costmap_) != expected_len:
-            self.get_logger().warn(
-                f"Costmap data length ({len(self.costmap_)}) != width*height ({expected_len})."
-            )
-        '''
-
         self.received_map_ = True
 
     # runs the path planner at regular intervals as long as there is a new path request.
