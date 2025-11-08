@@ -187,7 +187,7 @@ class Controller(Node):
 
         # If target is behind (use 90°) OR if angle error large enough
         if abs(angle_diff) > (pi / 2.0) or abs(angle_diff) > 0.6 and not abs(angle_diff) < 0.3:
-            lin_vel = 0.00
+            lin_vel = 0.05
             ang_vel = self.max_ang_vel_ * (1.0 if angle_diff > 0 else -1.0)
 
             msg_cmd_vel = TwistStamped()
