@@ -1,4 +1,4 @@
-from math import hypot, atan2, inf, cos, sin
+from math import hypot, atan2, inf, cos, sin, isinf, isnan
 
 import rclpy
 from rclpy.node import Node
@@ -46,7 +46,10 @@ class Controller(Node):
         self.pub_lookahead_ = self.create_publisher(
             PoseStamped, 'lookahead_point', 10
         )
-        
+        self.sub_laserscan_ = self.create_subscription(
+            LaserScan, 'scan', self.callbackSubLaserScan_, qos_profile_sensor_data
+        )
+
         # Handles: Timers
         self.timer = self.create_timer(1.0 / self.frequency_, self.callbackTimer_)
 
@@ -54,6 +57,9 @@ class Controller(Node):
         self.path_poses = []
         self.received_odom_ = False
         self.received_path_ = False
+        self.latest_laserscan = None
+        self.obstacle_slowdown_threshold_ = 0.5  # robot slows down here
+        self.obstacle_stop_threshold_ = 0.1      # robot stops here
 
     # Callbacks =============================================================
     
@@ -85,6 +91,10 @@ class Controller(Node):
 
         self.received_odom_ = True
         self.get_logger().info(f"Odometry updated: x={self.rbt_x_:.3f}, y={self.rbt_y_:.3f}, yaw={self.rbt_yaw_:.3f}")
+
+    # LaserScan subscriber callback
+    def callbackSubLaserScan_(self, msg: LaserScan):
+        self.latest_laserscan = msg  # store most recent scan for use in timer
 
 
     # Gets the lookahead point's coordinates based on the current robot's position and planner's path
@@ -154,37 +164,56 @@ class Controller(Node):
             lin_vel = 0.0
             ang_vel = 0.0
         else:  
-        # Transform lookahead point to robot's local frame (for curvature calculation)
-        # Robot's yaw (heading) should be available as self.robot_yaw
-            lx = cos(-self.rbt_yaw_) * dx - sin(-self.rbt_yaw_) * dy
-            ly = sin(-self.rbt_yaw_) * dx + cos(-self.rbt_yaw_) * dy
-        
-            # Calculate curvature (kappa) for pure pursuit
-            # The basic formula is kappa = 2 * ly / Ld^2, where Ld is dist_to_lookahead
-            if dist_to_lookahead > 0:
-                curvature = 2 * ly / (dist_to_lookahead ** 2)
+            # start obstacle detection
+            if self.latest_laserscan is not None:
+                valid_ranges = [r for r in self.latest_laserscan.ranges if r > 0 and r < float('inf')]
+                min_distance = min(valid_ranges) if valid_ranges else float('inf')
+                self.obstacle_distance = min_distance
+
+                if min_distance < self.obstacle_stop_threshold_:
+                    self.obstacle_imminent_flag = True
+                    self.obstacle_near_flag = True
+                elif min_distance < self.obstacle_slowdown_threshold_:
+                    self.obstacle_imminent_flag = False
+                    self.obstacle_near_flag = True
+                else:
+                    self.obstacle_imminent_flag = False
+                    self.obstacle_near_flag = False
             else:
-                curvature = 0.0
+                self.obstacle_imminent_flag = False
+                self.obstacle_near_flag = False
+                
+                # Transform lookahead point to robot's local frame (for curvature calculation)
+                # Robot's yaw (heading) should be available as self.robot_yaw
+                lx = cos(-self.rbt_yaw_) * dx - sin(-self.rbt_yaw_) * dy
+                ly = sin(-self.rbt_yaw_) * dx + cos(-self.rbt_yaw_) * dy
+            
+                # Calculate curvature (kappa) for pure pursuit
+                # The basic formula is kappa = 2 * ly / Ld^2, where Ld is dist_to_lookahead
+                if dist_to_lookahead > 0:
+                    curvature = 2 * ly / (dist_to_lookahead ** 2)
+                else:
+                    curvature = 0.0
 
-            # Calculate desired linear and angular velocities
-            # Base linear speed with cap and gentle slowdown near target
-            lin_vel = min(self.lookahead_lin_vel_, self.max_lin_vel_, dist_to_lookahead)
-            ang_vel = curvature * lin_vel
+                # Calculate desired linear and angular velocities
+                # Base linear speed with cap and gentle slowdown near target
+                lin_vel = min(self.lookahead_lin_vel_, self.max_lin_vel_, dist_to_lookahead)
+                ang_vel = curvature * lin_vel
 
-            # Saturate angular velocity if needed
-            ang_vel = max(-self.max_ang_vel_, min(self.max_ang_vel_, ang_vel))
+                # Saturate angular velocity if needed
+                ang_vel = max(-self.max_ang_vel_, min(self.max_ang_vel_, ang_vel))
 
-        # saturate velocities. The following can result in the wrong curvature,
-        # but only when the robot is travelling too fast (which should not occur if well tuned).
-        #lin_vel = 0.0
-        #ang_vel = 0.0 * lookahead_x * lookahead_y
+                # saturate velocities. The following can result in the wrong curvature,
+                # but only when the robot is travelling too fast (which should not occur if well tuned).
+                #lin_vel = 0.0
+                #ang_vel = 0.0 * lookahead_x * lookahead_y
 
-        # publish velocities
-        msg_cmd_vel = TwistStamped()
-        msg_cmd_vel.header.stamp = self.get_clock().now().to_msg()
-        msg_cmd_vel.twist.linear.x = lin_vel
-        msg_cmd_vel.twist.angular.z = ang_vel
-        self.pub_cmd_vel_.publish(msg_cmd_vel)
+                # publish velocities
+                msg_cmd_vel = TwistStamped()
+                msg_cmd_vel.header.stamp = self.get_clock().now().to_msg()
+                msg_cmd_vel.twist.linear.x = lin_vel
+                msg_cmd_vel.twist.angular.z = ang_vel
+                self.pub_cmd_vel_.publish(msg_cmd_vel)
 
 
 # Main Boiler Plate =============================================================
