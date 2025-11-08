@@ -58,10 +58,8 @@ class Controller(Node):
         self.received_odom_ = False
         self.received_path_ = False
         self.latest_laserscan = None
-        self.obstacle_slowdown_threshold_ = 0.2  # robot slows down here
+        self.obstacle_slowdown_threshold_ = 0.5  # robot slows down here
         self.obstacle_stop_threshold_ = 0.1      # robot stops here
-        self.false_flag = False
-
 
     # Callbacks =============================================================
     
@@ -165,60 +163,57 @@ class Controller(Node):
         if dist_to_lookahead < self.stop_thres_:  # goal tolerance
             lin_vel = 0.0
             ang_vel = 0.0
-            print('Goal reached!')
         else:  
             # start obstacle detection
-            valid_ranges = [r for r in self.latest_laserscan.ranges if r > 0 and r < float('inf')]
-            min_distance = min(valid_ranges) if valid_ranges else float('inf')
-            self.obstacle_distance = min_distance
+            if self.latest_laserscan is not None:
+                valid_ranges = [r for r in self.latest_laserscan.ranges if r > 0 and r < float('inf')]
+                min_distance = min(valid_ranges) if valid_ranges else float('inf')
+                self.obstacle_distance = min_distance
 
-            if min_distance < self.obstacle_stop_threshold_:
-                self.obstacle_imminent_flag = True
-                self.obstacle_near_flag = True
-                print('Object too close!')
-            elif min_distance < self.obstacle_slowdown_threshold_:
-                self.obstacle_imminent_flag = False
-                self.obstacle_near_flag = True
-                print('Object is close to')
+                if min_distance < self.obstacle_stop_threshold_:
+                    self.obstacle_imminent_flag = True
+                    self.obstacle_near_flag = True
+                elif min_distance < self.obstacle_slowdown_threshold_:
+                    self.obstacle_imminent_flag = False
+                    self.obstacle_near_flag = True
+                else:
+                    self.obstacle_imminent_flag = False
+                    self.obstacle_near_flag = False
             else:
                 self.obstacle_imminent_flag = False
                 self.obstacle_near_flag = False
                 
-            print('Moving towards goal now')
+                # Transform lookahead point to robot's local frame (for curvature calculation)
+                # Robot's yaw (heading) should be available as self.robot_yaw
+                lx = cos(-self.rbt_yaw_) * dx - sin(-self.rbt_yaw_) * dy
+                ly = sin(-self.rbt_yaw_) * dx + cos(-self.rbt_yaw_) * dy
             
-            # Transform lookahead point to robot's local frame (for curvature calculation)
-            # Robot's yaw (heading) should be available as self.robot_yaw
-            lx = cos(-self.rbt_yaw_) * dx - sin(-self.rbt_yaw_) * dy
-            ly = sin(-self.rbt_yaw_) * dx + cos(-self.rbt_yaw_) * dy
-        
-            # Calculate curvature (kappa) for pure pursuit
-            # The basic formula is kappa = 2 * ly / Ld^2, where Ld is dist_to_lookahead
-            if dist_to_lookahead > 0:
-                curvature = 2 * ly / (dist_to_lookahead ** 2)
-            else:
-                curvature = 0.0
+                # Calculate curvature (kappa) for pure pursuit
+                # The basic formula is kappa = 2 * ly / Ld^2, where Ld is dist_to_lookahead
+                if dist_to_lookahead > 0:
+                    curvature = 2 * ly / (dist_to_lookahead ** 2)
+                else:
+                    curvature = 0.0
 
-            # Calculate desired linear and angular velocities
-            # Base linear speed with cap and gentle slowdown near target
-            lin_vel = min(self.lookahead_lin_vel_, self.max_lin_vel_, dist_to_lookahead)
-            ang_vel = curvature * lin_vel
+                # Calculate desired linear and angular velocities
+                # Base linear speed with cap and gentle slowdown near target
+                lin_vel = min(self.lookahead_lin_vel_, self.max_lin_vel_, dist_to_lookahead)
+                ang_vel = curvature * lin_vel
 
-            # Saturate angular velocity if needed
-            ang_vel = max(-self.max_ang_vel_, min(self.max_ang_vel_, ang_vel))
+                # Saturate angular velocity if needed
+                ang_vel = max(-self.max_ang_vel_, min(self.max_ang_vel_, ang_vel))
 
-            # saturate velocities. The following can result in the wrong curvature,
-            # but only when the robot is travelling too fast (which should not occur if well tuned).
-            #lin_vel = 0.0
-            #ang_vel = 0.0 * lookahead_x * lookahead_y
+                # saturate velocities. The following can result in the wrong curvature,
+                # but only when the robot is travelling too fast (which should not occur if well tuned).
+                #lin_vel = 0.0
+                #ang_vel = 0.0 * lookahead_x * lookahead_y
 
-            # publish velocities
-            msg_cmd_vel = TwistStamped()
-            msg_cmd_vel.header.stamp = self.get_clock().now().to_msg()
-            msg_cmd_vel.twist.linear.x = lin_vel
-            msg_cmd_vel.twist.angular.z = ang_vel
-            self.pub_cmd_vel_.publish(msg_cmd_vel)
-
-            self.false_flag = False
+                # publish velocities
+                msg_cmd_vel = TwistStamped()
+                msg_cmd_vel.header.stamp = self.get_clock().now().to_msg()
+                msg_cmd_vel.twist.linear.x = lin_vel
+                msg_cmd_vel.twist.angular.z = ang_vel
+                self.pub_cmd_vel_.publish(msg_cmd_vel)
 
 
 # Main Boiler Plate =============================================================

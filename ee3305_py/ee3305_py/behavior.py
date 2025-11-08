@@ -109,6 +109,14 @@ class Behavior(Node):
             )
             self.goal_reached_ = False
 
+    #Below is when the robot is stuck and needs a new path
+        # prev_x, prev_y = self.rbt_x_, self.rbt_y_
+        # stuck_counter = 0
+        # stuck_distance = 0.01
+        # if (hypot(self.rbt_x_ - prev_x, self.rbt_y_ - prev_y) < 0.01) and not self.goal_reached_:
+        #     stuck_counter += 1
+        #     if stuck_counter >= self.plan_frequency_ * 5:  # stuck for 5
+
     # Callback for publishing path requests between clicked_point (goal) and robot position.
     # Normally path requests are implemented with ROS2 service, and the service is called in the main timer.
     # To keep things simple for this course, we use only ROS2 tpics.
