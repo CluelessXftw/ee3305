@@ -30,7 +30,7 @@ class Behavior(Node):
             PoseStamped,
             "goal_pose",
             self.callbackSubGoalPose_,
-            qos_profile_sensor_data #use this for fast and continuous data 
+            qos_profile_services_default#use this for reliable data, every data must be kept
         )
 
         # !TODO: Odometry subscriber
