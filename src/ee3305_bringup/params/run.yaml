@@ -14,4 +14,4 @@ controller:
 
 planner:
   ros__parameters:
-    max_access_cost: 90 # {int} []
+    max_access_cost: 95 # {int} []
