@@ -3,9 +3,12 @@ from math import hypot, atan2, inf, cos, sin, isinf, isnan
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data, qos_profile_services_default
-from geometry_msgs.msg import PoseStamped, TwistStamped
+from geometry_msgs.msg import PoseStamped, TwistStamped, Twist
 from nav_msgs.msg import Odometry, Path
 from sensor_msgs.msg import LaserScan
+
+from math import atan2, sin, cos, pi
+
 
 
 class Controller(Node):
@@ -90,7 +93,7 @@ class Controller(Node):
         )
 
         self.received_odom_ = True
-        self.get_logger().info(f"Odometry updated: x={self.rbt_x_:.3f}, y={self.rbt_y_:.3f}, yaw={self.rbt_yaw_:.3f}")
+      
 
     # LaserScan subscriber callback
     def callbackSubLaserScan_(self, msg: LaserScan):
@@ -159,45 +162,50 @@ class Controller(Node):
         dy = lookahead_y - self.rbt_y_
         dist_to_lookahead = hypot(dx, dy)
         
-        # stop the robot if close to the point.
-        if dist_to_lookahead < self.stop_thres_:  # goal tolerance
-            lin_vel = 0.0
-            ang_vel = 0.0
-        else:  
-            # start obstacle detection
-            valid_ranges = [r for r in self.latest_laserscan.ranges if r > 0 and r < float('inf')]
-            min_distance = min(valid_ranges) if valid_ranges else float('inf')
-            self.obstacle_distance = min_distance
 
-            if min_distance < self.obstacle_stop_threshold_:
-                self.obstacle_imminent_flag = True
-                self.obstacle_near_flag = True
-            if min_distance < self.obstacle_slowdown_threshold_:
-                self.obstacle_imminent_flag = False
-                self.obstacle_near_flag = True
-        
-            self.obstacle_imminent_flag = False
-            self.obstacle_near_flag = False
+        def shortest_angle_diff(a, b):
+            # return signed smallest angle from b --> a, in [-pi, pi]
+            d = a - b
+            return atan2(sin(d), cos(d))
+
+        angle_to_point = atan2(dy, dx)
+        angle_diff = shortest_angle_diff(angle_to_point, self.rbt_yaw_)
+
+        # If target is behind (use 90°) OR if angle error large enough 
+        if abs(angle_diff) > (pi / 2.0) or abs(angle_diff) > 0.6:  
+            lin_vel = 0.0
+            ang_vel = self.max_ang_vel_ * (1.0 if angle_diff > 0 else -1.0)
+
+            msg_cmd_vel = TwistStamped()
+            msg_cmd_vel.header.stamp = self.get_clock().now().to_msg()
+            msg_cmd_vel.twist.linear.x = lin_vel
+            msg_cmd_vel.twist.angular.z = ang_vel
+            self.pub_cmd_vel_.publish(msg_cmd_vel)
             
-            # Transform lookahead point to robot's local frame (for curvature calculation)
-            # Robot's yaw (heading) should be available as self.robot_yaw
-            lx = cos(-self.rbt_yaw_) * dx - sin(-self.rbt_yaw_) * dy
-            ly = sin(-self.rbt_yaw_) * dx + cos(-self.rbt_yaw_) * dy
+            self.get_logger().info("Spin Modeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
+            
+            return
+        
+
+
+
+        lx = cos(-self.rbt_yaw_) * dx - sin(-self.rbt_yaw_) * dy
+        ly = sin(-self.rbt_yaw_) * dx + cos(-self.rbt_yaw_) * dy
         
             # Calculate curvature (kappa) for pure pursuit
             # The basic formula is kappa = 2 * ly / Ld^2, where Ld is dist_to_lookahead
-            if dist_to_lookahead > 0:
-                curvature = 2 * ly / (dist_to_lookahead ** 2)
-            else:
-                curvature = 0.0
+        if dist_to_lookahead > 0:
+            curvature = 2 * ly / (dist_to_lookahead ** 2)
+        else:
+            curvature = 0.0
 
             # Calculate desired linear and angular velocities
             # Base linear speed with cap and gentle slowdown near target
-            lin_vel = min(self.lookahead_lin_vel_, self.max_lin_vel_, dist_to_lookahead)
-            ang_vel = curvature * lin_vel
+        lin_vel = min(self.lookahead_lin_vel_, self.max_lin_vel_, dist_to_lookahead)
+        ang_vel = curvature * lin_vel
 
             # Saturate angular velocity if needed
-            ang_vel = max(-self.max_ang_vel_, min(self.max_ang_vel_, ang_vel))
+        ang_vel = max(-self.max_ang_vel_, min(self.max_ang_vel_, ang_vel))
 
             # saturate velocities. The following can result in the wrong curvature,
             # but only when the robot is travelling too fast (which should not occur if well tuned).
