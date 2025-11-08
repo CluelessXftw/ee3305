@@ -33,7 +33,7 @@ class Planner(Node):
         super().__init__(node_name)
 
         # Parameters: Declare
-        self.declare_parameter("max_access_cost", int(99)) 
+        self.declare_parameter("max_access_cost", int(98)) 
         self.declare_parameter("use_a_star", False) #toggle between dijkstra and a*, default is False, unless specified in run.yaml
         self.declare_parameter("heuristic_type", "octile")  # options: euclidean, octile (euclidean is more smmooth, octile is faster and diagonal)
 
