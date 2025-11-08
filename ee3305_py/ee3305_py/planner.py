@@ -34,13 +34,15 @@ class Planner(Node):
 
         # Parameters: Declare
         self.declare_parameter("max_access_cost", int(98)) 
-        self.declare_parameter("use_a_star", False) #toggle between dijkstra and a*, default is False, unless specified in run.yaml
+        self.declare_parameter("use_a_star", False) #toggle on a*, default is False, unless specified in run.yaml
         self.declare_parameter("heuristic_type", "octile")  # options: euclidean, octile (euclidean is more smmooth, octile is faster and diagonal)
+        self.declare_parameter("use_theta_star", False)  # toggle to use theta* algorithm, default is False unless specified in run.yaml
 
         # Parameters: Get Values
         self.max_access_cost_ = self.get_parameter("max_access_cost").value
         self.use_a_star_ = self.get_parameter("use_a_star").value #get use_a_star parameter
         self.heuristic_type_ = self.get_parameter("heuristic_type").value #get heuristic type parameter
+        self.use_theta_star_ = self.get_parameter("use_theta_star").value #get use_theta_star parameter
 
         # Handles: Topic Subscribers
         # Global costmap subscriber
@@ -199,6 +201,31 @@ class Planner(Node):
         else:
             return 0
         
+    def line_of_sight_(self, node0, node1):
+        #Bresenham's Line Algorithm
+        c0, r0 = node0.c, node0.r
+        c1, r1 = node1.c, node1.r
+        dc = abs(c1 - c0)
+        dr = abs(r1 - r0)
+        signc = 1 if c1 - c0 > 0 else -1
+        signr = 1 if r1 - r0 > 0 else -1
+        error = dc - dr
+        r,c = r0, c0
+        while True:
+            idx = self.CRToIndex_(c, r)
+            if self.costmap_[idx] > self.max_access_cost_:
+                return False
+            if c == c1 and r == r1:
+                break
+            error2 = error * 2
+            if error2 > -dr:
+                error -= dr
+                c += signc
+            if error2 < dc:
+                error += dc
+                r += signr
+        return True
+        
 
     # Runs the path planning algorithm based on the world coordinates.
     def dijkstra_(self, start_x, start_y, goal_x, goal_y):
@@ -209,7 +236,7 @@ class Planner(Node):
         #return
 
         # Initializations ---------------------------------
-        expansions = 0 # to count number of expansions to compare dijkstra and a*
+        expansions = 0 # to count number of expansions to compare algorithms
         
         # Initialize nodes
         #nodes = [DijkstraNode(0, 0)]  # replace this (Done - CY)
@@ -225,7 +252,8 @@ class Planner(Node):
         start_node.g = 0.0
 
         #setting the starting node can change depending on algorithm (separate cuz a* still in progress, can still test with dijkstra)
-        if self.use_a_star_:
+        # Use heuristic when running A* or Theta*
+        if self.use_a_star_ or self.use_theta_star_:
             start_node.h = self.heuristic_(rbt_c, rbt_r, goal_c, goal_r)
         else:
             start_node.h = 0.0
@@ -308,19 +336,33 @@ class Planner(Node):
                 cell_cost = self.costmap_[nb_idx]
                 if cell_cost > self.max_access_cost_:
                     continue
-
                 # Get the relative g-cost and push to open-list
                 dist = hypot(dc, dr) #account for diagonal movement
-                relative_g = node.g + dist * (cell_cost + 1)
-                if relative_g < nb_node.g:
-                    nb_node.g = relative_g
+                # Standard relaxation cost (current node as parent)
+                standard_g = node.g + dist * (cell_cost + 1)
+
+                best_parent = node
+                best_g = standard_g
+
+                # Theta*: try to shortcut to the neighbor from node.parent if line-of-sight exists
+                if self.use_theta_star_ and node.parent is not None:
+                    p = node.parent
+                    if self.line_of_sight_(p, nb_node):
+                        los_dist = hypot(nb_c - p.c, nb_r - p.r)
+                        los_g = p.g + los_dist * (cell_cost + 1)
+                        if los_g < best_g:
+                            best_g = los_g
+                            best_parent = p
+
+                if best_g < nb_node.g:
+                    nb_node.g = best_g
                     # Compute/update heuristic & f depending on algorithm
-                    if self.use_a_star_:
+                    if self.use_a_star_ or self.use_theta_star_:
                         nb_node.h = self.heuristic_(nb_c, nb_r, goal_c, goal_r)
                     else:
                         nb_node.h = 0.0
                     nb_node.f = nb_node.g + nb_node.h
-                    nb_node.parent = node
+                    nb_node.parent = best_parent
                     heappush(open_list, nb_node)
 
         self.get_logger().warn(f"No Path Found! Expansions: {expansions}")
