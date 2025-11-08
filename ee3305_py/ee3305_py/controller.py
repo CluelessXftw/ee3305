@@ -186,7 +186,7 @@ class Controller(Node):
         angle_diff = shortest_angle_diff(angle_to_point, self.rbt_yaw_)
 
         # If target is behind (use 90°) OR if angle error large enough
-        if  abs(angle_diff) > (pi / 2.0) and not self.goal_is_reached_:
+        if abs(angle_diff) > (pi / 2.0) or abs(angle_diff) > 0.6 and not abs(angle_diff) < 0.3:
             lin_vel = 0.00
             ang_vel = self.max_ang_vel_ * (1.0 if angle_diff > 0 else -1.0)
 
@@ -211,17 +211,17 @@ class Controller(Node):
         self.obstacle_imminent_flag = False
         self.obstacle_near_flag = False
 
-        # if min_distance < self.obstacle_stop_threshold_:
-        #     lin_vel = 0.0
-        #     ang_vel = self.max_ang_vel_
+        if min_distance < self.obstacle_stop_threshold_:
+            lin_vel = 0.0
+            ang_vel = self.max_ang_vel_
 
-        #     msg_cmd_vel = TwistStamped()
-        #     msg_cmd_vel.header.stamp = self.get_clock().now().to_msg()
-        #     msg_cmd_vel.twist.linear.x = lin_vel
-        #     msg_cmd_vel.twist.angular.z = ang_vel
-        #     self.pub_cmd_vel_.publish(msg_cmd_vel)
-        #     self.get_logger().info("hitting obstacle, proceed with re path planningggggggggggggggggggggggggggg")
-        #     return
+            msg_cmd_vel = TwistStamped()
+            msg_cmd_vel.header.stamp = self.get_clock().now().to_msg()
+            msg_cmd_vel.twist.linear.x = lin_vel
+            msg_cmd_vel.twist.angular.z = ang_vel
+            self.pub_cmd_vel_.publish(msg_cmd_vel)
+            self.get_logger().info("hitting obstacle, proceed with re path planningggggggggggggggggggggggggggg")
+            return
             
 
 
