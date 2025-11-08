@@ -33,7 +33,7 @@ class Planner(Node):
         super().__init__(node_name)
 
         # Parameters: Declare
-        self.declare_parameter("max_access_cost", int(100))
+        self.declare_parameter("max_access_cost", int(99)) 
 
         # Parameters: Get Values
         self.max_access_cost_ = self.get_parameter("max_access_cost").value
@@ -103,15 +103,8 @@ class Planner(Node):
         self.costmap_cols_ = msg.info.width
 
         self.costmap_ = list(msg.data) #create a copy of the costmap data
-
-        # Check if costmap data length matches rows * cols
-        '''
-        expected_len = int(self.costmap_rows_ * self.costmap_cols_)
-        if len(self.costmap_) != expected_len:
-            self.get_logger().warn(
-                f"Costmap data length ({len(self.costmap_)}) != width*height ({expected_len})."
-            )
-        '''
+        #print(self.costmap_) #understanding what costmap looks like
+    
 
         self.received_map_ = True
 
