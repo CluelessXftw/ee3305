@@ -212,8 +212,11 @@ class Planner(Node):
         error = dc - dr
         r,c = r0, c0
         while True:
+            # guard bounds
+            if self.outOfMap_(c, r):
+                return False
             idx = self.CRToIndex_(c, r)
-            if self.costmap_[idx] > self.max_access_cost_:
+            if self.costmap_[idx] > self.max_access_cost_ - 20: #safety buffer
                 return False
             if c == c1 and r == r1:
                 break
