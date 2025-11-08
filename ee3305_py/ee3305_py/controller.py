@@ -181,13 +181,12 @@ class Controller(Node):
         if abs(heading_error) > rotate_threshold:
             # Rotate in place
             print("Rotating in place to face the goal")
-            lin_vel = 0.0
+            lin_vel = 0.5 * (1 if heading_error > 0 else -1)  # small forward velocity to help rotation
             ang_vel = max(-self.max_ang_vel_, min(self.max_ang_vel_, heading_error))
             if abs(ang_vel) < 0.2:
                 ang_vel = 0.2 * (1 if heading_error > 0 else -1)   
             print(f"Publishing: lin_vel={lin_vel}, ang_vel={ang_vel}")
         else:
-        
             # stop the robot if close to the point.
             if dist_to_lookahead < self.stop_thres_:  # goal tolerance
                 lin_vel = 0.0
