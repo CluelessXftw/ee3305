@@ -58,8 +58,10 @@ class Controller(Node):
         self.received_odom_ = False
         self.received_path_ = False
         self.latest_laserscan = None
-        self.obstacle_slowdown_threshold_ = 0.5  # robot slows down here
+        self.obstacle_slowdown_threshold_ = 0.2  # robot slows down here
         self.obstacle_stop_threshold_ = 0.1      # robot stops here
+        self.false_flag = False
+
 
     # Callbacks =============================================================
     
@@ -163,25 +165,25 @@ class Controller(Node):
         if dist_to_lookahead < self.stop_thres_:  # goal tolerance
             lin_vel = 0.0
             ang_vel = 0.0
+            print('Goal reached!')
         else:  
             # start obstacle detection
-            if self.latest_laserscan is not None:
-                valid_ranges = [r for r in self.latest_laserscan.ranges if r > 0 and r < float('inf')]
-                min_distance = min(valid_ranges) if valid_ranges else float('inf')
-                self.obstacle_distance = min_distance
+            valid_ranges = [r for r in self.latest_laserscan.ranges if r > 0 and r < float('inf')]
+            min_distance = min(valid_ranges) if valid_ranges else float('inf')
+            self.obstacle_distance = min_distance
 
-                if min_distance < self.obstacle_stop_threshold_:
-                    self.obstacle_imminent_flag = True
-                    self.obstacle_near_flag = True
-                elif min_distance < self.obstacle_slowdown_threshold_:
-                    self.obstacle_imminent_flag = False
-                    self.obstacle_near_flag = True
-                else:
-                    self.obstacle_imminent_flag = False
-                    self.obstacle_near_flag = False
+            if min_distance < self.obstacle_stop_threshold_:
+                self.obstacle_imminent_flag = True
+                self.obstacle_near_flag = True
+                print('Object too close!')
+            elif min_distance < self.obstacle_slowdown_threshold_:
+                self.obstacle_imminent_flag = False
+                self.obstacle_near_flag = True
+                print('Object is close to')
             else:
                 self.obstacle_imminent_flag = False
                 self.obstacle_near_flag = False
+                print('Moving towards goal now')
                 
                 # Transform lookahead point to robot's local frame (for curvature calculation)
                 # Robot's yaw (heading) should be available as self.robot_yaw
@@ -214,6 +216,8 @@ class Controller(Node):
                 msg_cmd_vel.twist.linear.x = lin_vel
                 msg_cmd_vel.twist.angular.z = ang_vel
                 self.pub_cmd_vel_.publish(msg_cmd_vel)
+
+                self.false_flag = False
 
 
 # Main Boiler Plate =============================================================
