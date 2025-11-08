@@ -199,22 +199,32 @@ class Controller(Node):
             self.get_logger().info("Spin Modeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
             
             return
-        
 
 # Process LaserScan to find the minimum distance to an obstacle
+        if not hasattr(self, "latest_laserscan"):
+            return
+        
         valid_ranges = [r for r in self.latest_laserscan.ranges if r > 0 and r < float('inf')]
         min_distance = min(valid_ranges) if valid_ranges else float('inf')
         self.obstacle_distance = min_distance
 
+        self.obstacle_imminent_flag = False
+        self.obstacle_near_flag = False
+
         if min_distance < self.obstacle_stop_threshold_:
-            self.obstacle_imminent_flag = True
-            self.obstacle_near_flag = True
-        elif min_distance < self.obstacle_slowdown_threshold_:
-            self.obstacle_imminent_flag = False
-            self.obstacle_near_flag = True
-        else:
-            self.obstacle_imminent_flag = False
-            self.obstacle_near_flag = False
+            lin_vel = 0.0
+            ang_vel = self.max_ang_vel_
+
+            msg_cmd_vel = TwistStamped()
+            msg_cmd_vel.header.stamp = self.get_clock().now().to_msg()
+            msg_cmd_vel.twist.linear.x = lin_vel
+            msg_cmd_vel.twist.angular.z = ang_vel
+            self.pub_cmd_vel_.publish(msg_cmd_vel)
+            self.get_logger().info("hitting obstacle, proceed with re path planning")
+            return
+            
+
+
 
         lx = cos(-self.rbt_yaw_) * dx - sin(-self.rbt_yaw_) * dy
         ly = sin(-self.rbt_yaw_) * dx + cos(-self.rbt_yaw_) * dy
