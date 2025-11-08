@@ -322,11 +322,11 @@ class Planner(Node):
                 nb_c = node.c + dc
                 nb_r = node.r + dr
                 #nb_idx = 0 * nb_c * nb_r
-                nb_idx = self.CRToIndex_(nb_c, nb_r)
 
                 # Continue if out of map
                 if self.outOfMap_(nb_c, nb_r):
                     continue
+                nb_idx = self.CRToIndex_(nb_c, nb_r)
 
                 # Get the neighbor node
                 nb_node = nodes[nb_idx]
