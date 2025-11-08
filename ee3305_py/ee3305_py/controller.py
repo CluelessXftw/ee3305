@@ -1,4 +1,4 @@
-from math import hypot, atan2, inf, cos, sin, isinf, isnan
+from math import hypot, atan2, inf, cos, sin, isinf, isnan, pi
 
 import rclpy
 from rclpy.node import Node
@@ -99,7 +99,7 @@ class Controller(Node):
 
     # Gets the lookahead point's coordinates based on the current robot's position and planner's path
     # Make sure path and robot positions are already received, and the path contains at least one point.
-    def getLookaheadPoint_(self, adaptive_lookahead_distance):
+    def getLookaheadPoint_(self):
         # Find the point along the path that is closest to the robot
         min_dist = float('inf')
         closest_idx = 0
@@ -111,13 +111,18 @@ class Controller(Node):
                 min_dist = dist
                 closest_idx = i
                 
+        speed = self.lookahead_lin_vel_ 
+
         # From the closest point, iterate towards the goal and find the first point that is at least a lookahead distance away.
         # Return the goal point if no more lookahead point
         lookahead_idx = len(self.path_poses_) - 1
         for i in range(closest_idx, len(self.path_poses_)):
             px = self.path_poses_[i].pose.position.x
             py = self.path_poses_[i].pose.position.y
-            dist = hypot(px - self.rbt_x_, py - self.rbt_y_)
+            dx = px - self.rbt_x_
+            dy = py - self.rbt_y_
+            dist = hypot(dx, dy)
+            adaptive_lookahead_distance = self.getAdaptiveLookaheadDistance(speed, dx, dy)
             if dist >= adaptive_lookahead_distance:
                 lookahead_idx = i
                 break   # Stop at first point that satisfies lookahead distance
@@ -138,11 +143,21 @@ class Controller(Node):
         # Return the coordinates
         return lookahead_x, lookahead_y
     
-    def getAdaptiveLookaheadDistance(self): # IMPROVEMENT: Adaptive LookAhead Distance
+    def getAdaptiveLookaheadDistance(self, speed, dx, dy): # IMPROVEMENT: Adaptive LookAhead Distance
         # proportional to current max linear velocity or speed
         # ensure minimum and maximum bounds for lookahead distance
-        speed = self.lookahead_lin_vel_ 
-        lookahead = max(0.2, min(1.0, speed * 2.0))
+        speed = self.lookahead_lin_vel_
+
+        # Heading error
+        heading_to_goal = atan2(dy, dx)
+        heading_error = heading_to_goal - self.rbt_yaw_
+        # Normalize heading_error to [-pi, pi]
+        heading_error = (heading_error + pi) % (2 * pi) - pi
+
+        # Reduce lookahead for sharp turns (large heading error)
+        heading_factor = max(0.3, 1.0 - abs(heading_error) / pi)  # 0.3~1.0
+
+        lookahead = max(0.2, min(1.0, speed * 2.0 * heading_factor))
         return lookahead
 
     # Implement the pure pursuit controller here
@@ -151,8 +166,7 @@ class Controller(Node):
             return  # return silently if path or odom is not received.
 
         # get lookahead point
-        adaptive_lookahead_distance = self.getAdaptiveLookaheadDistance()
-        lookahead_x, lookahead_y = self.getLookaheadPoint_(adaptive_lookahead_distance)
+        lookahead_x, lookahead_y = self.getLookaheadPoint_()
 
         # get distance to lookahead point (not to be confused with lookahead_distance)
         dx = lookahead_x - self.rbt_x_
@@ -172,12 +186,12 @@ class Controller(Node):
             if min_distance < self.obstacle_stop_threshold_:
                 self.obstacle_imminent_flag = True
                 self.obstacle_near_flag = True
-            if min_distance < self.obstacle_slowdown_threshold_:
+            elif min_distance < self.obstacle_slowdown_threshold_:
                 self.obstacle_imminent_flag = False
                 self.obstacle_near_flag = True
-        
-            self.obstacle_imminent_flag = False
-            self.obstacle_near_flag = False
+            else:
+                self.obstacle_imminent_flag = False
+                self.obstacle_near_flag = False
             
             # Transform lookahead point to robot's local frame (for curvature calculation)
             # Robot's yaw (heading) should be available as self.robot_yaw
