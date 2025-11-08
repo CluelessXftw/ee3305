@@ -23,8 +23,8 @@ class DijkstraNode:
         self.expanded = False
 
     def __lt__(self, other):  # comparator for heapq (min-heap) sorting
-        return self.g < other.g
-
+        # Modified comaprator from g to f. For Dijkstra f = g + (h=0); for A* f = g+h. Using f keeps code unified.
+        return self.f < other.f
 
 class Planner(Node):
 
@@ -34,9 +34,13 @@ class Planner(Node):
 
         # Parameters: Declare
         self.declare_parameter("max_access_cost", int(99)) 
+        self.declare_parameter("use_a_star", False) #toggle between dijkstra and a*, default is False, unless specified in run.yaml
+        self.declare_parameter("heuristic_type", "octile")  # options: euclidean, octile (euclidean is more smmooth, octile is faster and diagonal)
 
         # Parameters: Get Values
         self.max_access_cost_ = self.get_parameter("max_access_cost").value
+        self.use_a_star_ = self.get_parameter("use_a_star").value #get use_a_star parameter
+        self.heuristic_type_ = self.get_parameter("heuristic_type").value #get heuristic type parameter
 
         # Handles: Topic Subscribers
         # Global costmap subscriber
@@ -182,16 +186,30 @@ class Planner(Node):
     #Logic: if c or r < 0 or more than total cols/rows - 1 return true.
     def outOfMap_(self, c, r):
         return (c < 0 or r < 0) or ((c >= self.costmap_cols_) or (r >= self.costmap_rows_))
+    
+    def heuristic_(self, c, r, goal_c, goal_r):
+        dx = abs(c - goal_c)
+        dy = abs(r - goal_r)
+        if self.heuristic_type_ == "octile":
+            # For 8-connected grids:
+            # h = max(dx, dy) + (sqrt(2)-1)*min(dx, dy)
+            return max(dx, dy) + (2 ** 0.5 - 1.0) * min(dx, dy)
+        elif self.heuristic_type_ == "euclidean":
+            return (dx * dx + dy * dy) ** 0.5
+        else:
+            return 0
+        
 
     # Runs the path planning algorithm based on the world coordinates.
     def dijkstra_(self, start_x, start_y, goal_x, goal_y):
-
+        
         #Exit if start = goal (Todo)
         # Delete both lines when ready to code planner.py -----------------
         #self.publishInterpolatedPath(start_x, start_y, goal_x, goal_y)
         #return
 
         # Initializations ---------------------------------
+        expansions = 0 # to count number of expansions to compare dijkstra and a*
         
         # Initialize nodes
         #nodes = [DijkstraNode(0, 0)]  # replace this (Done - CY)
@@ -205,7 +223,14 @@ class Planner(Node):
         rbt_idx = self.CRToIndex_(rbt_c, rbt_r)
         start_node = nodes[rbt_idx]
         start_node.g = 0.0
-        start_node.parent = None #actually dont need this
+
+        #setting the starting node can change depending on algorithm (separate cuz a* still in progress, can still test with dijkstra)
+        if self.use_a_star_:
+            start_node.h = self.heuristic_(rbt_c, rbt_r, goal_c, goal_r)
+        else:
+            start_node.h = 0.0
+        start_node.f = start_node.g + start_node.h
+        start_node.parent = None  # actually dont need this
 
         # Initialize open list
         open_list = []
@@ -221,6 +246,7 @@ class Planner(Node):
             if node.expanded:
                 continue
             node.expanded = True
+            expansions += 1 #add count
 
             # Return path if reached goal
             if node.c == goal_c and node.r == goal_r:
@@ -245,7 +271,7 @@ class Planner(Node):
                 self.pub_path_.publish(msg_path)
 
                 self.get_logger().info(
-                    f"Path Found from Rbt @ ({start_x:7.3f}, {start_y:7.3f}) to Goal @ ({goal_x:7.3f},{goal_y:7.3f})"
+                    f"Path Found from Rbt @ ({start_x:7.3f}, {start_y:7.3f}) to Goal @ ({goal_x:7.3f},{goal_y:7.3f}) | Expansions: {expansions}"
                 )
 
                 return
@@ -288,11 +314,16 @@ class Planner(Node):
                 relative_g = node.g + dist * (cell_cost + 1)
                 if relative_g < nb_node.g:
                     nb_node.g = relative_g
+                    # Compute/update heuristic & f depending on algorithm
+                    if self.use_a_star_:
+                        nb_node.h = self.heuristic_(nb_c, nb_r, goal_c, goal_r)
+                    else:
+                        nb_node.h = 0.0
+                    nb_node.f = nb_node.g + nb_node.h
                     nb_node.parent = node
                     heappush(open_list, nb_node)
 
-
-        self.get_logger().warn("No Path Found!")
+        self.get_logger().warn(f"No Path Found! Expansions: {expansions}")
 
 
 # Main Boiler Plate =============================================================

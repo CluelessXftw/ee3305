@@ -15,3 +15,5 @@ controller:
 planner:
   ros__parameters:
     max_access_cost: 99 # {int} []
+    use_a_star: True # {bool} []
+    heuristic_type: euclidean   # octile or euclidean
