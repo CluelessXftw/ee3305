@@ -90,16 +90,14 @@ class Planner(Node):
         
         # !TODO: write to rbt_x_, rbt_y_, goal_x_, goal_y_ (Done - CY)
         self.rbt_x_ = msg.poses[0].pose.position.x
-                self.declare_parameter("use_theta_star", False)  # toggle to use theta* algorithm, default is False unless specified in run.yaml
-                self.declare_parameter("smoothing_resample_spacing", 0.05)  # meters, spacing for post-process resampling
+        self.rbt_y_ = msg.poses[0].pose.position.y
         self.goal_x_ = msg.poses[1].pose.position.x
         self.goal_y_ = msg.poses[1].pose.position.y
         
         self.has_new_request_ = True
 
-                self.declare_parameter("heuristic_type", "octile")  # options: euclidean, octile (euclidean is more smooth, octile is faster and diagonal)
-                self.declare_parameter("use_theta_star", False)  # toggle to use theta* algorithm, default is False unless specified in run.yaml
-                self.declare_parameter("smoothing_resample_spacing", 0.05)  # meters, spacing for post-process resampling
+    # Global costmap subscriber callback
+    # This is only run once because the costmap is only published once, at the start of the launch.
     def callbackSubGlobalCostmap_(self, msg: OccupancyGrid):
         
         # !TODO: write to costmap_, costmap_resolution_, costmap_origin_x_, costmap_origin_y_, costmap_rows_, costmap_cols_
@@ -124,39 +122,6 @@ class Planner(Node):
         # run the path planner
         self.dijkstra_(self.rbt_x_, self.rbt_y_, self.goal_x_, self.goal_y_)
 
-    
-            def _resample_path_xy_(self, points_xy, spacing):
-                # Resample polyline defined by list of (x,y) at roughly fixed spacing
-                if not points_xy:
-                    return []
-                if len(points_xy) == 1:
-                    return points_xy[:]
-                out = [points_xy[0]]
-                acc = 0.0
-                prev_x, prev_y = points_xy[0]
-                for i in range(1, len(points_xy)):
-                    x, y = points_xy[i]
-                    dx = x - prev_x
-                    dy = y - prev_y
-                    seg_len = (dx*dx + dy*dy) ** 0.5
-                    if seg_len == 0:
-                        continue
-                    ux = dx / seg_len
-                    uy = dy / seg_len
-                    d = 0.0
-                    while acc + seg_len - d >= spacing:
-                        remain = spacing - acc
-                        nx = prev_x + ux * (d + remain)
-                        ny = prev_y + uy * (d + remain)
-                        out.append((nx, ny))
-                        d += remain
-                        acc = 0.0
-                    acc += seg_len - d
-                    prev_x, prev_y = x, y
-                # Ensure the last point is the goal exactly
-                if out[-1] != points_xy[-1]:
-                    out.append(points_xy[-1])
-                return out
         self.has_new_request_ = False
 
     # Publish the interpolated path for testing
