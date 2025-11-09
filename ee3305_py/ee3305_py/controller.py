@@ -1,13 +1,12 @@
 from math import hypot, atan2, inf, cos, sin, isinf, isnan, pi
-
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data, qos_profile_services_default
-from geometry_msgs.msg import PoseStamped, TwistStamped, Twist
+from geometry_msgs.msg import PoseStamped, TwistStamped
 from nav_msgs.msg import Odometry, Path
 from sensor_msgs.msg import LaserScan
+from std_msgs.msg import Bool
 
-from math import atan2, sin, cos, pi
 
 
 
@@ -44,6 +43,19 @@ class Controller(Node):
         self.sub_laserscan_ = self.create_subscription(
             LaserScan, 'scan', self.callbackSubLaserScan_, qos_profile_sensor_data
         )
+
+#for behavior modes
+        self.sub_stuck_recovery_ = self.create_subscription(
+            Bool, "stuck_recovery_mode", self.callbackStuckMode_, 10
+        )
+        self.sub_spinspin_ = self.create_subscription(
+            Bool, "spinspin_mode", self.callbackSpinMode_, 10
+        )
+        self.sub_obstacle_avoid_ = self.create_subscription(
+            Bool, "obstacle_avoidance_mode", self.callbackObstacleAvoidMode_, 10
+        )
+
+
 
         # Publishers
         self.pub_cmd_vel_ = self.create_publisher(
@@ -91,13 +103,23 @@ class Controller(Node):
             2.0 * (q.w * q.z + q.x * q.y),
             1.0 - 2.0 * (q.y * q.y + q.z * q.z),
         )
-
         self.received_odom_ = True
       
 
     # LaserScan subscriber callback
     def callbackSubLaserScan_(self, msg: LaserScan):
         self.latest_laserscan = msg  # store most recent scan for use in timer
+
+
+#behaviour callbacks
+    def callbackStuckMode_(self, msg: Bool):
+        self.stuck_recovery_mode_ = msg.data
+
+    def callbackSpinMode_(self, msg: Bool):
+        self.spinspin_mode_ = msg.data
+
+    def callbackObstacleAvoidMode_(self, msg: Bool):
+        self.obstacle_avoidance_mode_ = msg.data
 
 
     # Gets the lookahead point's coordinates based on the current robot's position and planner's path
@@ -176,54 +198,44 @@ class Controller(Node):
         dy = lookahead_y - self.rbt_y_
         dist_to_lookahead = hypot(dx, dy)
         
-
         def shortest_angle_diff(a, b):
-            # return signed smallest angle from b --> a, in [-pi, pi]
             d = a - b
             return atan2(sin(d), cos(d))
-
+        
         angle_to_point = atan2(dy, dx)
         angle_diff = shortest_angle_diff(angle_to_point, self.rbt_yaw_)
 
         # If target is behind (use 90°) OR if angle error large enough
-        if abs(angle_diff) > (pi / 2.0) or abs(angle_diff) > 0.6 and not abs(angle_diff) < 0.3:
+        if self.spinspin_mode_:
             lin_vel = 0.05
             ang_vel = self.max_ang_vel_ * (1.0 if angle_diff > 0 else -1.0)
-
             msg_cmd_vel = TwistStamped()
             msg_cmd_vel.header.stamp = self.get_clock().now().to_msg()
             msg_cmd_vel.twist.linear.x = lin_vel
             msg_cmd_vel.twist.angular.z = ang_vel
             self.pub_cmd_vel_.publish(msg_cmd_vel)
-            
-            self.get_logger().info("Spin Modeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
-            
+            self.get_logger().info("[BEHAVIOR] SpinSpin Mode Active")
             return
 
-# Process LaserScan to find the minimum distance to an obstacle
-        if not hasattr(self, "latest_laserscan"):
-            return
-        
-        valid_ranges = [r for r in self.latest_laserscan.ranges if r > 0 and r < float('inf')]
-        min_distance = min(valid_ranges) if valid_ranges else float('inf')
-        self.obstacle_distance = min_distance
-
-        self.obstacle_imminent_flag = False
-        self.obstacle_near_flag = False
-
-        if min_distance < self.obstacle_stop_threshold_:
+        if self.obstacle_avoidance_mode_:
             lin_vel = 0.0
-            ang_vel = self.max_ang_vel_
-
+            ang_vel = 0.5
             msg_cmd_vel = TwistStamped()
             msg_cmd_vel.header.stamp = self.get_clock().now().to_msg()
             msg_cmd_vel.twist.linear.x = lin_vel
             msg_cmd_vel.twist.angular.z = ang_vel
             self.pub_cmd_vel_.publish(msg_cmd_vel)
-            self.get_logger().info("hitting obstacle, proceed with re path planningggggggggggggggggggggggggggg")
+            self.get_logger().info("[BEHAVIOR] Obstacle Avoidance Active")
             return
             
-
+        if self.stuck_recovery_mode_:
+            msg_cmd_vel = TwistStamped()  # Create the message first
+            msg_cmd_vel.header.stamp = self.get_clock().now().to_msg()
+            msg_cmd_vel.twist.linear.x = -0.1
+            msg_cmd_vel.twist.angular.z = 0.0
+            self.get_logger().info("[BEHAVIOR] Retreating (Stuck Recovery)")
+            self.pub_cmd_vel_.publish(msg_cmd_vel)
+            return
 
 
         lx = cos(-self.rbt_yaw_) * dx - sin(-self.rbt_yaw_) * dy
