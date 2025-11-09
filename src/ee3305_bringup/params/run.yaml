@@ -17,4 +17,4 @@ planner:
     max_access_cost: 98 # {int} []
     use_a_star: True # {bool} [] True or False, False to use Dijkstra
     heuristic_type: euclidean   # octile or euclidean
-    use_theta_star: False # {bool} [] True or False, False to not use Theta*
+    use_theta_star: True # {bool} [] True or False, False to not use Theta*

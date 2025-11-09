@@ -32,6 +32,12 @@ class Controller(Node):
         self.max_lin_vel_ = self.get_parameter("max_lin_vel").get_parameter_value().double_value
         self.max_ang_vel_ = self.get_parameter("max_ang_vel").get_parameter_value().double_value
 
+
+        self.stuck_recovery_mode_ = False
+        self.spinspin_mode_ = False
+        self.obstacle_avoidance_mode_ = False
+
+
         # Handles: Topic Subscribers
         # Subscribers
         self.sub_path_ = self.create_subscription(
@@ -206,6 +212,52 @@ class Controller(Node):
         angle_diff = shortest_angle_diff(angle_to_point, self.rbt_yaw_)
 
         # If target is behind (use 90°) OR if angle error large enough
+#Priority is IMPORTANTTTTTT
+        if self.obstacle_avoidance_mode_:
+            spin_dir = 1.0 
+            if hasattr(self, "latest_laserscan") and self.latest_laserscan is not None:
+                scan = self.latest_laserscan
+                angle = scan.angle_min
+
+                left_min  = float('inf')
+                right_min = float('inf')
+
+                for r in scan.ranges:
+                    # skip invalid
+                    if r <= 0.0 or r == float('inf') or isnan(r):
+                        angle += scan.angle_increment
+                        continue
+
+                    # only care about front hemisphere (-90° to +90°)
+                    if -pi/2 <= angle <= pi/2:
+                        if angle >= 0:
+                            # front-left
+                            left_min = min(left_min, r)
+                        else:
+                            # front-right
+                            right_min = min(right_min, r)
+
+                    angle += scan.angle_increment
+
+                # decide spin direction: turn AWAY from closer side
+                if left_min < right_min:
+                    # obstacle closer on left -> spin right (negative z)
+                    spin_dir = -1.0
+                else:
+                    # obstacle closer on right -> spin left (positive z)
+                    spin_dir = 1.0
+
+
+            lin_vel = 0.0
+            ang_vel = spin_dir * (self.max_ang_vel_ * 0.5)
+            msg_cmd_vel = TwistStamped()
+            msg_cmd_vel.header.stamp = self.get_clock().now().to_msg()
+            msg_cmd_vel.twist.linear.x = lin_vel
+            msg_cmd_vel.twist.angular.z = ang_vel
+            self.pub_cmd_vel_.publish(msg_cmd_vel)
+            self.get_logger().info("[BEHAVIOR] Obstacle Avoidance Active")
+            return
+        
         if self.spinspin_mode_:
             lin_vel = 0.05
             ang_vel = self.max_ang_vel_ * (1.0 if angle_diff > 0 else -1.0)
@@ -217,16 +269,6 @@ class Controller(Node):
             self.get_logger().info("[BEHAVIOR] SpinSpin Mode Active")
             return
 
-        if self.obstacle_avoidance_mode_:
-            lin_vel = 0.0
-            ang_vel = 0.5
-            msg_cmd_vel = TwistStamped()
-            msg_cmd_vel.header.stamp = self.get_clock().now().to_msg()
-            msg_cmd_vel.twist.linear.x = lin_vel
-            msg_cmd_vel.twist.angular.z = ang_vel
-            self.pub_cmd_vel_.publish(msg_cmd_vel)
-            self.get_logger().info("[BEHAVIOR] Obstacle Avoidance Active")
-            return
             
         if self.stuck_recovery_mode_:
             msg_cmd_vel = TwistStamped()  # Create the message first
