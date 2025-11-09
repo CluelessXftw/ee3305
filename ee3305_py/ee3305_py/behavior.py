@@ -63,7 +63,7 @@ class Behavior(Node):
             Odometry,
             "odom",
             self.callbackSubOdom_,
-            qos_profile_sensor_data #use this for reliable data, every data must be kept
+            qos_profile_services_default #use this for reliable data, every data must be kept
         )
 
 
@@ -72,7 +72,7 @@ class Behavior(Node):
             PoseStamped,
             "lookahead_point",
             self.callbackSubLookahead_,
-            qos_profile_sensor_data
+            qos_profile_services_default
         )
         
         self.sub_laserscan_ = self.create_subscription(
@@ -95,19 +95,19 @@ class Behavior(Node):
         self.pub_stuck_recovery_mode_flag_ = self.create_publisher(
             Bool,
             "stuck_recovery_mode",
-            10
+            qos_profile_services_default
         )
 
         self.pub_spinspin_mode_flag_ = self.create_publisher(
             Bool,
             "spinspin_mode",
-            10
+            qos_profile_services_default
         )
 
         self.pub_obstacle_avoidance_mode_flag_ = self.create_publisher(
             Bool,
             "obstacle_avoidance_mode",
-            10
+            qos_profile_services_default
         )
 
 
