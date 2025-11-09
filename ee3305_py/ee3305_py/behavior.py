@@ -32,7 +32,7 @@ class Behavior(Node):
         self.frequency_ = self.get_parameter("frequency").value
         self.plan_frequency_ = self.get_parameter("plan_frequency").value
 
-        #below is for unstuck mission 
+      
         self.prev_rbt_x_ = None
         self.prev_rbt_y_ = None
         self.stuck_counter_ = 0
@@ -63,10 +63,8 @@ class Behavior(Node):
             Odometry,
             "odom",
             self.callbackSubOdom_,
-            qos_profile_services_default #use this for reliable data, every data must be kept
+            qos_profile_services_default 
         )
-
-
 
         self.sub_lookahead_ = self.create_subscription(
             PoseStamped,
@@ -89,8 +87,6 @@ class Behavior(Node):
             "path_request",
             qos_profile_services_default
         )   
-
-
 
         self.pub_stuck_recovery_mode_flag_ = self.create_publisher(
             Bool,
@@ -207,7 +203,7 @@ class Behavior(Node):
             self.obstacle_avoidance_mode_ = False       
 
         # If stuck too long, trigger retreat
-        if self.stuck_counter_ >= self.stuck_threshold_ and not self.stuck_recovery_mode_:
+        if self.stuck_counter_ >= self.stuck_threshold_ and not self.stuck_recovery_mode_ and not self.goal_reached_:
             self.stuck_recovery_mode_ = True
             self.stuck_counter_ = 0
             self.get_logger().info("=================< STUCK RECOVERINGG >==========================")
@@ -227,14 +223,14 @@ class Behavior(Node):
         angle_diff = shortest_angle_diff(angle_to_point, self.rbt_yaw_)
 
         # pi/2 is 90 degrees, 0.87 is about 50 degrees , 0.26 is about 15 degrees
-        if abs(angle_diff) > 0.87 and abs(angle_diff) < pi:
+        if abs(angle_diff) > 0.87 and abs(angle_diff) < pi and not self.goal_reached_:
             self.spinspin_mode_ = True
             self.get_logger().info("SPINSPINSPINSPINSPINSPINSPINSPINSPINSPINSPINSPINSPINSPIN")
         else:
             self.spinspin_mode_ = False
 
     #Obstacle Avoidance Mode 
-        if self.latest_laserscan_:
+        if self.latest_laserscan_ and not self.goal_reached_:
             valid_ranges = [r for r in self.latest_laserscan_.ranges if r > 0.0 and r < float('inf')]
             if valid_ranges:
                 min_dist = min(valid_ranges)
@@ -266,10 +262,7 @@ class Behavior(Node):
         obstacle_avoidance_mode_msg.data = self.obstacle_avoidance_mode_
         self.pub_obstacle_avoidance_mode_flag_.publish(obstacle_avoidance_mode_msg)
 
-        # Limit spamming
-        if self.get_clock().now().nanoseconds % 20 == 0:
-            self.get_logger().info(f"Flags -> STUCK:{self.stuck_recovery_mode_} | SPIN:{self.spinspin_mode_} | OBSTACLE:{self.obstacle_avoidance_mode_}")
-
+    
         # Update previous robot pose
         self.prev_rbt_x_ = self.rbt_x_
         self.prev_rbt_y_ = self.rbt_y_
@@ -278,6 +271,10 @@ class Behavior(Node):
     # Normally path requests are implemented with ROS2 service, and the service is called in the main timer.
     # To keep things simple for this course, we use only ROS2 tpics.
     def callbackTimerPlan_(self):
+
+        if self.goal_reached_:
+            return
+
         if not self.received_goal_coords_ or not self.received_rbt_coords_:
             return  # silently return if none of the coords are received from the subscribers
 
