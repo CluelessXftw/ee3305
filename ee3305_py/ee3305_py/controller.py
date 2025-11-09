@@ -255,7 +255,7 @@ class Controller(Node):
             msg_cmd_vel.twist.linear.x = lin_vel
             msg_cmd_vel.twist.angular.z = ang_vel
             self.pub_cmd_vel_.publish(msg_cmd_vel)
-            self.get_logger().info("[BEHAVIOR] Obstacle Avoidance Active")
+            self.get_logger().info("[BEHAVIOR] Obstacle Avoidance ActiveeEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE")
             return
         
         if self.spinspin_mode_:
