@@ -34,8 +34,8 @@ class Planner(Node):
 
         # Parameters: Declare
         self.declare_parameter("max_access_cost", int(98)) 
-        self.declare_parameter("use_a_star", False) #toggle on a*, default is False, unless specified in run.yaml
-        self.declare_parameter("heuristic_type", "octile")  # options: euclidean, octile (euclidean is more smmooth, octile is faster and diagonal)
+        self.declare_parameter("use_a_star", True) #toggle on a*, default is False, unless specified in run.yaml
+        self.declare_parameter("heuristic_type", "euclidean")  # options: euclidean, octile (euclidean is more smmooth, octile is faster and diagonal)
         self.declare_parameter("use_theta_star", False)  # toggle to use theta* algorithm, default is False unless specified in run.yaml
 
         # Parameters: Get Values
