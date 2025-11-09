@@ -121,11 +121,11 @@ class Behavior(Node):
     #Below is when the robot is stuck and needs a new path
         if self.prev_rbt_x_ is not None:
             dist_moved = hypot(self.rbt_x_ - self.prev_rbt_x_, self.rbt_y_ - self.prev_rbt_y_)
-        if dist_moved < self.stuck_distance_ and not goal_is_close:
-            self.stuck_counter_ += 1
-        else:
-            self.stuck_counter_ = 0
-            self.retreating_ = False
+            if dist_moved < self.stuck_distance_ and not goal_is_close:
+                self.stuck_counter_ += 1
+            else:
+                self.stuck_counter_ = 0
+                self.retreating_ = False
 
         # If stuck too long, trigger retreat
         if self.stuck_counter_ >= self.stuck_threshold_ and not self.retreating_:
