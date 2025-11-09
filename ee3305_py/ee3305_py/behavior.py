@@ -41,7 +41,7 @@ class Behavior(Node):
         self.retreat_distance_ = 0.2 # how far to retreat
         self.obstacle_slowdown_threshold_ = 0.5
         self.obstacle_stop_threshold_ = 0.1
-        self.anangle_to_spin_threshold_ = 0.87  # about 50 degrees
+        self.angle_to_spin_threshold_ = 0.87  # about 50 degrees
 
            
         self.stuck_recovery_mode_ = False
@@ -224,7 +224,7 @@ class Behavior(Node):
         angle_diff = shortest_angle_diff(angle_to_point, self.rbt_yaw_)
 
         # pi/2 is 90 degrees, 0.87 is about 50 degrees , 0.26 is about 15 degrees
-        if abs(angle_diff) > angle_to_spin_threshold and abs(angle_diff) < pi and not self.goal_reached_:
+        if abs(angle_diff) > self.angle_to_spin_threshold_ and abs(angle_diff) < pi and not self.goal_reached_:
             self.spinspin_mode_ = True
             self.get_logger().info("SPINSPINSPINSPINSPINSPINSPINSPINSPINSPINSPINSPINSPINSPIN")
         else:
