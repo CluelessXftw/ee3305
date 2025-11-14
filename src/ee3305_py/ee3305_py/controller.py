@@ -39,7 +39,7 @@ class Controller(Node):
 
 
         # Handles: Topic Subscribers
-        # Subscribers
+        # Subscribers : receive data from planned path, position feedback (odometry), laser scan data and mode signals
         self.sub_path_ = self.create_subscription(
             Path, 'path', self.callbackSubPath_, 10
         )
@@ -63,7 +63,7 @@ class Controller(Node):
 
 
 
-        # Publishers
+        # Publishers, publish velocity and shares which map point the robot is currently chasing
         self.pub_cmd_vel_ = self.create_publisher(
             TwistStamped, 'cmd_vel', 10
         )
@@ -72,7 +72,7 @@ class Controller(Node):
         )
         
 
-        # Handles: Timers
+        # Handles: Timers schedules periodic execution based on configured frequency
         self.timer = self.create_timer(1.0 / self.frequency_, self.callbackTimer_)
 
         # Other Instance Variables
@@ -179,8 +179,8 @@ class Controller(Node):
         # ensure minimum and maximum bounds for lookahead distance
         speed = self.lookahead_lin_vel_
 
-        # Heading error
-        heading_to_goal = atan2(dy, dx)
+        # Heading error 
+        heading_to_goal = atan2(dy, dx) # find absolute heading angle from robot's current position to the lookahead point
         heading_error = heading_to_goal - self.rbt_yaw_
         # Normalize heading_error to [-pi, pi]
         heading_error = (heading_error + pi) % (2 * pi) - pi
@@ -212,7 +212,7 @@ class Controller(Node):
         angle_diff = shortest_angle_diff(angle_to_point, self.rbt_yaw_)
 
         # If target is behind (use 90°) OR if angle error large enough
-#Priority is IMPORTANTTTTTT
+        #Priority is IMPORTANTTTTTT
         if self.obstacle_avoidance_mode_:
             spin_dir = 1.0 
             if hasattr(self, "latest_laserscan") and self.latest_laserscan is not None:
